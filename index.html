@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en" class="overflow-x-hidden">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blade Repair Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script defer src="https://unpkg.com/alpinejs@3.x/dist/cdn.min.js"></script>
+    <style>
+        .severity-Cat1 { background-color: #dcfce7; border-color: #86efac; color: #166534; }
+        .severity-Cat2 { background-color: #dcfce7; border-color: #86efac; color: #166534; }
+        .severity-Cat3 { background-color: #fef9c3; border-color: #fde047; color: #854d0e; }
+        .severity-Cat4 { background-color: #ffedd5; border-color: #fb923c; color: #9a3412; }
+        .severity-Cat5 { background-color: #fee2e2; border-color: #f87171; color: #991b1b; }
+        
+        .tab-button.active {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .status-in_progress { background-color: #dbeafe; border-color: #93c5fd; color: #1e40af; }
+        .status-closed { background-color: #dcfce7; border-color: #86efac; color: #166534; }
+        
+        .blade-position-A { background-color: #f0f9ff; border-color: #bae6fd; color: #0369a1; }
+        .blade-position-B { background-color: #f5f3ff; border-color: #ddd6fe; color: #7c3aed; }
+        .blade-position-C { background-color: #fef2f2; border-color: #fecaca; color: #dc2626; }
+        
+        .sidebar {
+            transition: all 0.3s ease;
+            background-color: #f9f9f9;
+        }
+        
+        .page {
+            display: none;
+        }
+        
+        .page.active {
+            display: block;
+        }
+        
+        .timer-active {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        
+        .damage-card {
+            transition: all 0.2s ease;
+        }
+        
+        .damage-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .damage-card.active {
+            border-left: 4px solid #3b82f6;
+            background-color: #f8fafc;
+        }
+        
+        .damage-row {
+            transition: background-color 0.2s ease;
+        }
+        
+        .damage-row:hover {
+            background-color: #f8fafc;
+        }
+        
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        
+        .badge-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 16px;
+            border-radius: 6px;
+            color: white;
+            z-index: 1000;
+            animation: slideIn 0.5s, fadeOut 0.5s 2.5s;
+            animation-fill-mode: forwards;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                z-index: 40;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease-in-out;
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+        }
+        
+        /* Ensure table cells wrap content on small screens */
+        @media (max-width: 640px) {
+            .table-cell-wrap {
+                white-space: normal !important;
+                max-width: 200px;
+                overflow-wrap: break-word;
+                word-wrap: break-word;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans overflow-x-hidden">
+    <div class="min-h-screen flex max-w-full overflow-hidden">
+        <!-- Sidebar (Master View) -->
+        <div class="sidebar bg-white w-80 md:w-72 lg:w-80 shadow-md flex-shrink-0 flex flex-col transition-all duration-300" id="sidebar" role="navigation" aria-label="Blade navigation">
+            <div class="p-4 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="fas fa-fan text-green-500 text-2xl mr-3" aria-hidden="true"></i>
+                        <h1 class="text-xl font-bold text-gray-800">Blade Tracker</h1>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="sidebar-collapse-btn" class="bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-md md:hidden" aria-label="Collapse sidebar">
+                            <i class="fas fa-angle-double-left"></i>
+                        </button>
+                        <button id="add-damage-btn" 
+                                class="bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded-md text-sm font-medium flex items-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                aria-label="Add new damage">
+                            <i class="fas fa-plus mr-1" aria-hidden="true"></i> Add
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4">
+                <div class="mb-4">
+                    <input id="turbine-search" type="text" placeholder="Search turbines..." class="mb-2 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Search turbines">
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2" id="turbine-list-heading">Turbines</h3>
+                    <div id="turbine-list" class="space-y-1" role="list" aria-labelledby="turbine-list-heading">
+                        <!-- Turbines will be loaded here -->
+                    </div>
+                </div>
+                
+                <div id="blade-list-container">
+                    <input id="blade-search" type="text" placeholder="Search blades..." class="mb-2 w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="Search blades">
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2" id="blade-list-heading">Blades</h3>
+                    <div id="blade-list" class="space-y-2" role="list" aria-labelledby="blade-list-heading">
+                        <!-- Blades will be loaded here -->
+                    </div>
+                </div>
+                <button id="view-materials-summary-btn"
+                        class="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg text-sm font-medium transition-colors duration-150 flex items-center justify-center gap-2 shadow-sm"
+                        onclick="openMaterialsSummaryModal()">
+                    <i class="fas fa-boxes"></i>
+                    <span>View Materials Summary</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content (Detail View) -->
+        <div class="flex-1 flex flex-col bg-gray-50 min-w-0" role="main">
+            <!-- Header -->
+            <header class="bg-white shadow-sm">
+                <div class="px-4 sm:px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <button id="sidebar-toggle" 
+                                    class="mr-4 text-gray-500 hover:text-gray-700 md:hidden focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500" 
+                                    aria-label="Toggle Sidebar">
+                                <i class="fas fa-bars" aria-hidden="true"></i>
+                            </button>
+                            <h2 id="selected-blade-title" class="text-xl font-semibold text-gray-800 truncate" aria-live="polite">Select a Blade</h2>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div id="active-user" class="flex items-center" role="status" aria-label="Current user">
+                                <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium" aria-hidden="true">T</div>
+                                <span class="ml-2 text-sm font-medium">Technician</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Damage Details -->
+            <main class="flex-1 p-4 sm:p-6 overflow-x-hidden">
+                <div id="damage-details" class="hidden space-y-6" aria-live="polite">
+                    <!-- Stats Row -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6" role="region" aria-label="Damage statistics">
+                        <div class="bg-white rounded-lg shadow p-4">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mr-4">
+                                    <i class="fas fa-exclamation-circle text-blue-500"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">Total Damages</p>
+                                    <p id="blade-total-damages" class="text-2xl font-bold">0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-lg shadow p-4">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mr-4">
+                                    <i class="fas fa-tools text-blue-500"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">In&nbsp;Progress</p>
+                                    <p id="blade-inprogress-damages" class="text-2xl font-bold">0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-lg shadow p-4">
+                            <div class="flex items-center">
+                                <div class="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mr-4">
+                                    <i class="fas fa-check text-green-500"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500">Resolved</p>
+                                    <p id="blade-resolved-damages" class="text-2xl font-bold">0</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Damage Tables Container -->
+                    <div class="space-y-6">
+                        <!-- Open Damages -->
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="px-4 sm:px-6 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
+                                <h3 class="text-lg font-medium text-gray-800" id="damage-table-heading">Pending Damages</h3>
+                                <button id="quick-add-btn"
+                                        class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm flex items-center shrink-0"
+                                        onclick="openQuickAddDamageForm()">
+                                    <i class="fas fa-plus mr-1"></i> Quick add damage
+                                </button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200" role="grid" aria-labelledby="damage-table-heading">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="open-damages-table-body" class="bg-white divide-y divide-gray-200">
+                                        <!-- Open damages will be loaded here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- In-Progress Repairs -->
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
+                                <h3 class="text-lg font-medium text-gray-800" id="in-progress-table-heading">In-Progress Repairs</h3>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200" role="grid" aria-labelledby="in-progress-table-heading">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="in-progress-table-body" class="bg-white divide-y divide-gray-200">
+                                        <!-- In-progress damages will be loaded here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Completed Repairs -->
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="px-4 sm:px-6 py-4 border-b border-gray-200">
+                                <h3 class="text-lg font-medium text-gray-800" id="completed-table-heading">Completed Repairs</h3>
+                            </div>
+                            <table class="min-w-full divide-y divide-gray-200" role="grid" aria-labelledby="completed-table-heading">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Materials</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="completed-damages-table-body" class="bg-white divide-y divide-gray-200">
+                                    <!-- Completed damages will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="flex flex-col items-center justify-center h-full text-center p-4" role="status">
+                    <div class="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center mb-4" aria-hidden="true">
+                        <i class="fas fa-hand-point-left text-4xl text-blue-500"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-800 mb-2">Select a Blade</h3>
+                    <p class="text-gray-500">Choose a blade from the left sidebar to view its damage reports</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- New Damage Modal -->
+    <div id="new-damage-modal" 
+         class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-30 p-4" 
+         role="dialog" 
+         aria-labelledby="new-damage-title" 
+         aria-modal="true">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-start mb-4">
+                <h3 id="new-damage-title" class="text-lg font-medium text-gray-800">Add New Damage</h3>
+                <button id="close-new-damage-modal" 
+                        class="text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500" 
+                        aria-label="Close modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            
+            <form id="new-damage-form" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="damage-id">Damage ID</label>
+                        <input type="number" 
+                               id="damage-id" 
+                               class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                               required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="turbine-number">Turbine Number</label>
+                        <input type="number" 
+                               id="turbine-number" 
+                               class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                               required>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="turbine-serial">Turbine Serial</label>
+                        <input type="text" 
+                               id="turbine-serial" 
+                               class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                               required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="blade-serial">Blade Serial</label>
+                        <input type="text" 
+                               id="blade-serial" 
+                               class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                               required>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="damage-radius">Radius (m)</label>
+                        <input type="number" 
+                               id="damage-radius" 
+                               step="0.1" 
+                               class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                               required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="damage-side">Side</label>
+                        <select id="damage-side" 
+                                class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                                required>
+                            <option value="">Select side...</option>
+                            <option value="leading_edge">Leading Edge</option>
+                            <option value="trailing_edge">Trailing Edge</option>
+                            <option value="pressure_side">Pressure Side</option>
+                            <option value="suction_side">Suction Side</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="damage-category">Category</label>
+                    <select id="damage-category" 
+                            class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                            required>
+                        <option value="">Select category...</option>
+                        <option value="Cat 1">Category 1 (Minor)</option>
+                        <option value="Cat 2">Category 2 (Low)</option>
+                        <option value="Cat 3">Category 3 (Moderate)</option>
+                        <option value="Cat 4">Category 4 (High)</option>
+                        <option value="Cat 5">Category 5 (Critical)</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="damage-description">Description</label>
+                    <textarea id="damage-description" 
+                             rows="3" 
+                             class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                             required></textarea>
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" 
+                            onclick="closeNewDamageModal()" 
+                            class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 py-2 px-4 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                        Cancel
+                    </button>
+                    <button type="submit" 
+                            class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        Add Damage
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Damage Detail Modal -->
+    <div id="damage-detail-modal" 
+         class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-40 p-4" 
+         role="dialog" 
+         aria-labelledby="damage-detail-title" 
+         aria-modal="true">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-start mb-4">
+                <h3 id="damage-detail-title" class="text-lg font-medium text-gray-800">Damage Details</h3>
+                <button id="close-damage-detail-modal" class="text-gray-400 hover:text-gray-500" title="Close Modal" onclick="closeDamageDetailModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-6">
+                <!-- Damage Info -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="detail-damage-id">ID</label>
+                        <div class="relative">
+                            <input type="number" 
+                                   id="detail-damage-id" 
+                                   class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                   aria-label="Damage ID">
+                            <div id="id-duplicate-warning" class="hidden absolute -bottom-6 left-0 text-xs text-red-600">
+                                This ID is already in use
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                        <div class="flex gap-2">
+                            <div class="flex-1">
+                                <input type="number" 
+                                       id="detail-damage-radius" 
+                                       class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                       step="0.1"
+                                       aria-label="Damage radius in meters"
+                                       placeholder="Radius (m)">
+                            </div>
+                            <div class="flex-1">
+                                <select id="detail-damage-side" 
+                                        class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                        aria-label="Damage side">
+                                    <option value="leading_edge">Leading Edge</option>
+                                    <option value="trailing_edge">Trailing Edge</option>
+                                    <option value="pressure_side">Pressure Side</option>
+                                    <option value="suction_side">Suction Side</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                        <select id="detail-damage-category" 
+                                class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                title="Select damage category"
+                                aria-label="Damage category">
+                            <option value="Cat 1">Category 1 (Minor)</option>
+                            <option value="Cat 2">Category 2 (Low)</option>
+                            <option value="Cat 3">Category 3 (Moderate)</option>
+                            <option value="Cat 4">Category 4 (High)</option>
+                            <option value="Cat 5">Category 5 (Critical)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <select id="detail-damage-status" 
+                                class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                title="Select damage status"
+                                aria-label="Damage status">
+                            <option value="pending">Pending (Unrepaired)</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="closed">Completed</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea id="detail-damage-description" 
+                              rows="3" 
+                              class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                              title="Damage description"
+                              aria-label="Damage description"
+                              placeholder="Enter detailed description of the damage..."></textarea>
+                </div>
+
+                <!-- Repair Logs -->
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="text-sm font-medium text-gray-700">Repair Logs</h4>
+                    </div>
+                    <div id="repair-logs-list" class="space-y-2 mb-4">
+                        <!-- Logs will be loaded here -->
+                    </div>
+                    
+                    <!-- Add New Log -->
+                    <form id="add-log-form" class="bg-gray-50 p-4 rounded-lg">
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Hours Worked</label>
+                                <input type="number" 
+                                       id="log-hours" 
+                                       min="0" 
+                                       step="0.5" 
+                                       class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                                       required
+                                       title="Hours worked"
+                                       aria-label="Hours worked"
+                                       placeholder="Enter hours worked">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Weather</label>
+                                <select id="log-weather" 
+                                        class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                                        required
+                                        title="Select weather conditions"
+                                        aria-label="Weather conditions">
+                                    <option value="">Select weather conditions...</option>
+                                    <option value="Sunny">Sunny</option>
+                                    <option value="Cloudy">Cloudy</option>
+                                    <option value="Rainy">Rainy</option>
+                                    <option value="Windy">Windy</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Work Description</label>
+                            <textarea id="log-description" 
+                                      rows="2" 
+                                      class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                                      required
+                                      title="Work description"
+                                      aria-label="Work description"
+                                      placeholder="Describe the repair work performed..."></textarea>
+                        </div>
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-md text-sm font-medium">
+                            Add Log Entry
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Materials Used -->
+                <div class="mt-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="text-sm font-medium text-gray-700">Materials Used</h4>
+                    </div>
+                    <ul id="materials-list" class="pl-4 list-disc space-y-1"></ul>
+                    <!-- Add New Material -->
+                    <form id="add-material-form"
+                          class="flex gap-2 items-end"
+                          onsubmit="handleAddMaterial(event)">
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Material Name</label>
+                            <input type="text" 
+                                   id="material-name" 
+                                   class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                                   required
+                                   placeholder="e.g., Epoxy Resin A">
+                        </div>
+                        <div class="w-24">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Qty</label>
+                            <input type="number" 
+                                   id="material-qty" 
+                                   step="0.1" 
+                                   min="0.1"
+                                   class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                                   required
+                                   placeholder="Qty">
+                        </div>
+                        <div class="w-24">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                            <input type="text" 
+                                   id="material-unit" 
+                                   class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                                   required
+                                   placeholder="L, m², kg">
+                        </div>
+                        <button type="submit" 
+                                class="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-md"
+                                title="Add Material">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Save Changes Button -->
+                <div class="flex justify-end pt-4 border-t border-gray-200">
+                    <button type="button" 
+                            onclick="saveDamageChanges()" 
+                            class="bg-green-500 hover:bg-green-600 text-white py-2 px-6 rounded-md text-sm font-medium flex items-center gap-2">
+                        <i class="fas fa-save"></i>
+                        <span>Save Changes</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Add Damage Modal -->
+    <div id="quick-add-modal" 
+         class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-30 p-4" 
+         role="dialog" 
+         aria-labelledby="quick-add-title" 
+         aria-modal="true">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div class="flex justify-between items-start mb-4">
+                <h3 id="quick-add-title" class="text-lg font-medium text-gray-800">Quick Add Damage</h3>
+                <button onclick="closeQuickAddModal()" 
+                        class="text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500" 
+                        aria-label="Close modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="quick-add-form" class="space-y-4" onsubmit="handleQuickAddSubmit(event)">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="quick-damage-radius">Radius (m)</label>
+                        <input type="number" 
+                               id="quick-damage-radius" 
+                               step="0.1" 
+                               class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                               required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" for="quick-damage-side">Side</label>
+                        <select id="quick-damage-side" 
+                                class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                                required>
+                            <option value="">Select side...</option>
+                            <option value="leading_edge">Leading Edge</option>
+                            <option value="trailing_edge">Trailing Edge</option>
+                            <option value="pressure_side">Pressure Side</option>
+                            <option value="suction_side">Suction Side</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="quick-damage-category">Category</label>
+                    <select id="quick-damage-category" 
+                            class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                            required>
+                        <option value="">Select category...</option>
+                        <option value="Cat 1">Category 1 (Minor)</option>
+                        <option value="Cat 2">Category 2 (Low)</option>
+                        <option value="Cat 3">Category 3 (Moderate)</option>
+                        <option value="Cat 4">Category 4 (High)</option>
+                        <option value="Cat 5">Category 5 (Critical)</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" for="quick-damage-description">Description</label>
+                    <textarea id="quick-damage-description" 
+                             rows="3" 
+                             class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500" 
+                             required></textarea>
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" 
+                            onclick="closeQuickAddModal()" 
+                            class="bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 py-2 px-4 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                        Cancel
+                    </button>
+                    <button type="submit" 
+                            class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        Add Damage
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" 
+         class="hidden fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg max-w-[90vw]" 
+         role="alert" 
+         aria-live="polite"></div>
+
+    <!-- Materials Summary Modal -->
+    <div id="materials-summary-modal"
+         class="hidden fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 p-4"
+         role="dialog"
+         aria-modal="true">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-boxes text-blue-500 text-xl"></i>
+                    <h3 class="text-xl font-semibold text-gray-800">Materials Summary</h3>
+                </div>
+                <button onclick="closeMaterialsSummaryModal()" 
+                        class="text-gray-400 hover:text-gray-500 hover:bg-gray-100 p-2 rounded-full transition-colors duration-150" 
+                        aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 flex-1 overflow-y-auto">
+                <!-- Filter -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2" for="status-filter">
+                        Filter by Damage Status
+                    </label>
+                    <div class="relative">
+                        <select id="status-filter"
+                                class="w-full bg-white border border-gray-300 rounded-lg py-2.5 pl-4 pr-10 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
+                                onchange="updateMaterialsSummary()"
+                                title="Filter materials by damage status">
+                            <option value="">All Damages</option>
+                            <option value="pending">Pending (Unrepaired)</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="closed">Completed</option>
+                        </select>
+                        <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                            <i class="fas fa-chevron-down text-gray-400"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Materials Table -->
+                <div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Material Name</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Unit</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Damage Ref</th>
+                            </tr>
+                        </thead>
+                        <tbody id="materials-summary-table-body" class="bg-white divide-y divide-gray-200">
+                            <!-- Materials will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
